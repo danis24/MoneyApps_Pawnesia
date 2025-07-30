@@ -1,10 +1,10 @@
-# CLAUDE.md - CodeGuide Starter Kit Lite v2
+# CLAUDE.md - CodeGuide Starter Kit
 
 This file contains essential context about the project structure, technologies, and conventions to help Claude understand and work effectively within this codebase.
 
 ## Project Overview
 
-**CodeGuide Starter Kit Lite v2** is a modern Next.js starter template featuring authentication, database integration, AI capabilities, and a comprehensive UI component system.
+**CodeGuide Starter Kit** is a modern Next.js starter template featuring authentication, database integration, AI capabilities, and a comprehensive UI component system.
 
 ### Core Technologies
 

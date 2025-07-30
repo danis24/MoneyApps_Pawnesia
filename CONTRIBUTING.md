@@ -1,4 +1,4 @@
-# Contributing to CodeGuide Starter Kit Lite v2
+# Contributing to CodeGuide Starter Kit
 
 We welcome contributions to the CodeGuide Starter Kit! This document provides guidelines for contributing to the project.
 
@@ -172,4 +172,4 @@ CREATE POLICY "Users can manage own records" ON example_table
 - Ask questions in pull request discussions
 - Reach out to maintainers for guidance
 
-Thank you for contributing to CodeGuide Starter Kit Lite v2!
+Thank you for contributing to CodeGuide Starter Kit!
