@@ -1,20 +1,13 @@
+// Server-side only Supabase utilities
+// This file should only be imported by server components and API routes
+
 import { createClient } from "@supabase/supabase-js";
 import { auth } from "@clerk/nextjs/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: {
-    fetch: (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        cache: "no-store",
-      });
-    },
-  },
-});
-
+// Server-side Supabase client with Clerk authentication
 export async function createSupabaseServerClient() {
   const { getToken } = await auth();
   const token = await getToken();

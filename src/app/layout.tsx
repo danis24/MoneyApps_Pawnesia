@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Parkinsans } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Topbar } from "@/components/topbar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,15 +15,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const parkinsans = Parkinsans({
-  variable: "--font-parkinsans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "CodeGuide Starter Kit",
+  title: "MoneyApps - Sistem Manajemen Bisnis Multi-Channel",
   description:
-    "A modern Next.js starter with TypeScript, TailwindCSS, shadcn/ui, Vercel AI SDK, Clerk, and Supabase",
+    "Aplikasi manajemen bisnis & penjualan multi-channel dengan inventory, keuangan, dan AI assistant",
 };
 
 export default function RootLayout({
@@ -34,7 +35,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body
-          className={`${geistSans.variable} ${geistMono.variable} ${parkinsans.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}
         >
           <ThemeProvider
             attribute="class"
@@ -42,7 +43,10 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            {children}
+            <Topbar />
+            <main className="min-h-screen bg-background">
+              {children}
+            </main>
           </ThemeProvider>
         </body>
       </html>

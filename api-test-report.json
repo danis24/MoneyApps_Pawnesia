@@ -1,0 +1,87 @@
+{
+  "timestamp": "2025-10-03T07:32:07.519Z",
+  "summary": {
+    "total": 13,
+    "passed": 0,
+    "failed": 13,
+    "successRate": "0.0"
+  },
+  "results": [
+    {
+      "table": "profiles",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "shops",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "products",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "materials",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "finance_categories",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "transactions",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "categories",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "sales",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "sale_items",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "stock_history",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "table": "employees",
+      "status": "error",
+      "error": "Cannot read properties of null (reading 'count')",
+      "duration": 0
+    },
+    {
+      "test": "materials_columns",
+      "status": "error",
+      "error": "column materials.unit_price does not exist"
+    },
+    {
+      "test": "products_columns",
+      "status": "error",
+      "error": "column products.sku does not exist"
+    }
+  ]
+}
