@@ -559,6 +559,11 @@ export default function BOMPage() {
 
   const editBOMVariation = (bom: BOMVariation) => {
     setEditingBOMVariation(bom);
+    // Find the parent variation to maintain context
+    const parentVariation = productVariations.find(v => v.id === bom.product_variation_id);
+    if (parentVariation) {
+      setSelectedVariation(parentVariation);
+    }
     setBomVariationForm({
       material_id: bom.material_id,
       quantity: bom.quantity.toString(),
