@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Package,
@@ -59,10 +60,11 @@ interface StockHistory {
   product_id?: string;
   type: string;
   quantity: number;
-  remaining_stock: number;
-  reference_id?: string;
-  reference_type: string;
-  notes: string;
+  previous_quantity: number;
+  new_quantity: number;
+  reason?: string;
+  user_id: string;
+  shop_id?: string;
   created_at: string;
   materials?: {
     name: string;
@@ -176,9 +178,10 @@ export default function InventoryPage() {
       const material = materials.find(m => m.id === adjustmentForm.material_id);
       if (!material) return;
 
+      const currentStock = material.current_stock;
       const newStock = adjustmentForm.type === "in"
-        ? material.current_stock + adjustmentForm.quantity
-        : material.current_stock - adjustmentForm.quantity;
+        ? currentStock + adjustmentForm.quantity
+        : currentStock - adjustmentForm.quantity;
 
       // Update material stock
       const { error: updateError } = await authSupabase
@@ -188,6 +191,13 @@ export default function InventoryPage() {
 
       if (updateError) throw updateError;
 
+      // Get shop_id from material
+      const { data: materialData } = await authSupabase
+        .from("materials")
+        .select("shop_id")
+        .eq("id", adjustmentForm.material_id)
+        .single();
+
       // Record stock history
       const { error: historyError } = await authSupabase
         .from("stock_history")
@@ -195,10 +205,11 @@ export default function InventoryPage() {
           material_id: adjustmentForm.material_id,
           type: adjustmentForm.type,
           quantity: adjustmentForm.quantity,
-          remaining_stock: newStock,
-          reference_type: "adjustment",
-          notes: adjustmentForm.notes,
+          previous_quantity: currentStock,
+          new_quantity: newStock,
+          reason: adjustmentForm.notes,
           user_id: user?.id,
+          shop_id: materialData?.shop_id,
         });
 
       if (historyError) throw historyError;
@@ -288,24 +299,20 @@ export default function InventoryPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="material">Bahan</Label>
-                <Select
-                  value={adjustmentForm.material_id}
-                  onValueChange={(value) => setAdjustmentForm({ ...adjustmentForm, material_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih bahan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {materials.map((material) => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.name} ({material.current_stock} {material.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SearchableSelect
+                label="Bahan"
+                placeholder="Pilih bahan baku"
+                options={materials.map((material) => ({
+                  value: material.id,
+                  label: material.name,
+                  description: `${material.unit} | Rp ${material.unit_price.toLocaleString("id-ID")} | Stok: ${material.current_stock} ${material.unit}`
+                }))}
+                value={adjustmentForm.material_id}
+                onValueChange={(value) => setAdjustmentForm({ ...adjustmentForm, material_id: value })}
+                className="mb-4"
+                dropdownWidth="min-w-[400px] max-w-[600px]"
+                triggerMaxWidth="max-w-[400px]"
+              />
               <div>
                 <Label htmlFor="type">Tipe</Label>
                 <Select
@@ -558,14 +565,14 @@ export default function InventoryPage() {
                       <TableCell className={history.type === "in" ? "text-green-600" : "text-red-600"}>
                         {history.type === "in" ? "+" : "-"}{history.quantity}
                       </TableCell>
-                      <TableCell>{history.remaining_stock}</TableCell>
+                      <TableCell>{history.new_quantity}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
-                          {history.reference_type}
+                          {history.type === "in" ? "Masuk" : history.type === "out" ? "Keluar" : "Penyesuaian"}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-xs truncate">
-                        {history.notes || "-"}
+                        {history.reason || "-"}
                       </TableCell>
                     </TableRow>
                   ))}
