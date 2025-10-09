@@ -764,7 +764,7 @@ export default function ProductsPage() {
       unit: material.unit,
       unit_price: material.unit_price.toString(),
       current_stock: material.current_stock.toString(),
-      min_stock: material.min_stock.toString(),
+      min_stock: material.min_stock?.toString() || "",
     });
     setShowMaterialDialog(true);
   };
