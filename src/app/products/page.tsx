@@ -5,6 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -77,6 +84,7 @@ interface Material {
   unit_price: number;
   current_stock: number;
   min_stock: number;
+  type: "Jasa" | "Bahan";
   created_at: string;
 }
 
@@ -146,6 +154,7 @@ export default function ProductsPage() {
     unit_price: "",
     current_stock: "",
     min_stock: "",
+    type: "Bahan" as "Jasa" | "Bahan",
   });
 
   const { user, isSignedIn } = useCurrentUser();
@@ -612,6 +621,7 @@ export default function ProductsPage() {
       unit_price: "",
       current_stock: "",
       min_stock: "",
+      type: "Bahan",
     });
     setEditingMaterial(null);
   };
@@ -675,6 +685,7 @@ export default function ProductsPage() {
             unit_price: parseFloat(materialForm.unit_price),
             current_stock: parseFloat(materialForm.current_stock),
             min_stock: parseFloat(materialForm.min_stock),
+            type: materialForm.type,
           })
           .eq("id", editingMaterial.id);
 
@@ -690,6 +701,7 @@ export default function ProductsPage() {
             unit_price: parseFloat(materialForm.unit_price),
             current_stock: parseFloat(materialForm.current_stock),
             min_stock: parseFloat(materialForm.min_stock),
+            type: materialForm.type,
             user_id: user?.id,
           });
 
@@ -765,6 +777,7 @@ export default function ProductsPage() {
       unit_price: material.unit_price.toString(),
       current_stock: material.current_stock.toString(),
       min_stock: material.min_stock?.toString() || "",
+      type: material.type || "Bahan",
     });
     setShowMaterialDialog(true);
   };
@@ -1175,6 +1188,18 @@ export default function ProductsPage() {
                         value={materialForm.min_stock}
                         onChange={(e) => setMaterialForm({ ...materialForm, min_stock: e.target.value })}
                       />
+                    </div>
+                    <div>
+                      <Label htmlFor="type">Tipe</Label>
+                      <Select value={materialForm.type} onValueChange={(value) => setMaterialForm({ ...materialForm, type: value as "Jasa" | "Bahan" })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih tipe" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Bahan">Bahan</SelectItem>
+                          <SelectItem value="Jasa">Jasa</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <Button onClick={saveMaterial} className="w-full">

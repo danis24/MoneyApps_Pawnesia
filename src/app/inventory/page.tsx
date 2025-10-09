@@ -37,6 +37,7 @@ interface Material {
   unit_price: number;
   current_stock: number;
   min_stock: number;
+  type: "Jasa" | "Bahan";
   created_at: string;
 }
 
@@ -118,6 +119,7 @@ export default function InventoryPage() {
         .from("materials")
         .select("*")
         .eq("user_id", user?.id)
+        .eq("type", "Bahan")
         .order("name");
 
       // Fetch products
@@ -128,7 +130,7 @@ export default function InventoryPage() {
         .eq("is_active", true)
         .order("name");
 
-      // Fetch stock history
+      // Fetch stock history - only for materials with type "Bahan"
       const { data: historyData } = await authSupabase
         .from("stock_history")
         .select(`
@@ -142,6 +144,7 @@ export default function InventoryPage() {
           )
         `)
         .eq("user_id", user?.id)
+        .in("material_id", materialsData?.filter(m => m.type === "Bahan").map(m => m.id) || [])
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -163,13 +166,13 @@ export default function InventoryPage() {
   };
 
   const getTotalInventoryValue = () => {
-    return materials.reduce((total, material) => {
+    return materials.filter(material => material.type === "Bahan").reduce((total, material) => {
       return total + (material.current_stock * material.unit_price);
     }, 0);
   };
 
   const getLowStockMaterials = () => {
-    return materials.filter(material => material.current_stock <= material.min_stock);
+    return materials.filter(material => material.type === "Bahan" && material.current_stock <= material.min_stock);
   };
 
   const saveStockAdjustment = async () => {
@@ -309,7 +312,7 @@ export default function InventoryPage() {
               <SearchableSelect
                 label="Bahan"
                 placeholder="Pilih bahan baku"
-                options={materials.map((material) => ({
+                options={materials.filter(material => material.type === "Bahan").map((material) => ({
                   value: material.id,
                   label: material.name,
                   description: `${material.unit} | Rp ${material.unit_price.toLocaleString("id-ID")} | Stok: ${material.current_stock} ${material.unit}`
@@ -441,7 +444,7 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materials.map((material) => {
+                  {materials.filter(material => material.type === "Bahan").map((material) => {
                     const status = getStockStatus(material);
                     const totalValue = material.current_stock * material.unit_price;
 
