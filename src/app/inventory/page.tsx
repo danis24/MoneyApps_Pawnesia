@@ -88,6 +88,7 @@ export default function InventoryPage() {
   const [stockHistory, setStockHistory] = useState<StockHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const { user, isSignedIn } = useCurrentUser();
   const { getToken } = useAuth();
@@ -173,10 +174,14 @@ export default function InventoryPage() {
 
   const saveStockAdjustment = async () => {
     try {
+      setSaving(true);
       const token = await getToken();
       const authSupabase = createSupabaseClientWithAuth(token);
       const material = materials.find(m => m.id === adjustmentForm.material_id);
-      if (!material) return;
+      if (!material) {
+        setSaving(false);
+        return;
+      }
 
       const currentStock = material.current_stock;
       const newStock = adjustmentForm.type === "in"
@@ -225,6 +230,8 @@ export default function InventoryPage() {
     } catch (error) {
       console.error("Error saving adjustment:", error);
       alert("Gagal menyimpan penyesuaian stok");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -348,10 +355,10 @@ export default function InventoryPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={saveStockAdjustment} className="flex-1">
-                  Simpan
+                <Button onClick={saveStockAdjustment} className="flex-1" disabled={saving}>
+                  {saving ? "Menyimpan..." : "Simpan"}
                 </Button>
-                <Button variant="outline" onClick={() => setShowAdjustmentDialog(false)}>
+                <Button variant="outline" onClick={() => setShowAdjustmentDialog(false)} disabled={saving}>
                   Batal
                 </Button>
               </div>

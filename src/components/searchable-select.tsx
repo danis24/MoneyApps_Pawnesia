@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredOptions = useMemo(() => {
     if (!searchTerm) return options;
@@ -46,6 +47,16 @@ export function SearchableSelect({
   }, [options, searchTerm]);
 
   const selectedOption = options.find(option => option.value === value);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      // Use setTimeout to ensure the dropdown is fully rendered
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 10);
+    }
+  }, [isOpen]);
 
   return (
     <div className={className}>
@@ -83,11 +94,13 @@ export function SearchableSelect({
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 placeholder="Cari..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                }}
                 className="pl-8"
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
@@ -102,6 +115,11 @@ export function SearchableSelect({
                   key={option.value}
                   value={option.value}
                   className="py-3"
+                  onSelect={() => {
+                    onValueChange(option.value);
+                    setSearchTerm("");
+                    setIsOpen(false);
+                  }}
                 >
                   <div className="flex flex-col w-full">
                     <div className="font-medium text-sm flex items-start gap-2 break-words whitespace-normal leading-tight">

@@ -70,6 +70,9 @@ export default function BOMPage() {
   const [showBOMDialog, setShowBOMDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [bomToDuplicate, setBomToDuplicate] = useState<BOMItem | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savingVariation, setSavingVariation] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [duplicateForm, setDuplicateForm] = useState({
     target_product_id: "",
     copy_quantity: true,
@@ -451,6 +454,7 @@ export default function BOMPage() {
 
   const saveBOM = async () => {
     try {
+      setSaving(true);
       const token = await getToken();
       const authSupabase = createSupabaseClientWithAuth(token);
 
@@ -458,6 +462,7 @@ export default function BOMPage() {
       if (bomForm.product_id.startsWith('variation_')) {
         if (!selectedProductForVariation) {
           alert('Silakan pilih variasi yang valid');
+          setSaving(false);
           return;
         }
 
@@ -498,11 +503,20 @@ export default function BOMPage() {
     } catch (error) {
       console.error("Error saving BOM:", error);
       alert("Gagal menyimpan BOM");
+    } finally {
+      setSaving(false);
     }
   };
 
   const deleteBOM = async (bomId: string, isVariationBOM = false) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus item BOM ini?")) return;
+    const bom = isVariationBOM
+      ? bomVariations.find(b => b.id === bomId)
+      : bomItems.find(b => b.id === bomId);
+
+    if (!bom) return;
+
+    const materialName = bom.material?.name || "bahan baku ini";
+    if (!confirm(`Apakah Anda yakin ingin menghapus item BOM untuk ${materialName}?`)) return;
 
     try {
       const token = await getToken();
@@ -578,6 +592,7 @@ export default function BOMPage() {
     if (!selectedVariation) return;
 
     try {
+      setSavingVariation(true);
       const token = await getToken();
       const authSupabase = createSupabaseClientWithAuth(token);
 
@@ -625,6 +640,8 @@ export default function BOMPage() {
     } catch (error) {
       console.error("Error saving BOM variation:", error);
       alert("Gagal menyimpan BOM variasi");
+    } finally {
+      setSavingVariation(false);
     }
   };
 
@@ -681,6 +698,7 @@ export default function BOMPage() {
     }
 
     try {
+      setDuplicating(true);
       const token = await getToken();
       const authSupabase = createSupabaseClientWithAuth(token);
 
@@ -706,6 +724,8 @@ export default function BOMPage() {
     } catch (error) {
       console.error("Error duplicating BOM:", error);
       alert("Gagal menduplikasi BOM. Silakan coba lagi.");
+    } finally {
+      setDuplicating(false);
     }
   };
 
@@ -865,8 +885,10 @@ export default function BOMPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={saveBOM} className="flex-1">Simpan</Button>
-                <Button variant="outline" onClick={() => setShowBOMDialog(false)}>
+                <Button onClick={saveBOM} className="flex-1" disabled={saving}>
+                  {saving ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button variant="outline" onClick={() => setShowBOMDialog(false)} disabled={saving}>
                   Batal
                 </Button>
               </div>
@@ -950,10 +972,10 @@ export default function BOMPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={duplicateBOM} className="flex-1" disabled={!duplicateForm.target_product_id || !duplicateValidation.isValid}>
-                    Duplikasi
+                  <Button onClick={duplicateBOM} className="flex-1" disabled={!duplicateForm.target_product_id || !duplicateValidation.isValid || duplicating}>
+                    {duplicating ? "Menduplikasi..." : "Duplikasi"}
                   </Button>
-                  <Button variant="outline" onClick={resetDuplicateForm}>
+                  <Button variant="outline" onClick={resetDuplicateForm} disabled={duplicating}>
                     Batal
                   </Button>
                 </div>
@@ -1591,11 +1613,11 @@ export default function BOMPage() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowBOMVariationDialog(false)}>
+              <Button variant="outline" onClick={() => setShowBOMVariationDialog(false)} disabled={savingVariation}>
                 Batal
               </Button>
-              <Button onClick={saveBOMVariation}>
-                {editingBOMVariation ? 'Update' : 'Simpan'}
+              <Button onClick={saveBOMVariation} disabled={savingVariation}>
+                {savingVariation ? (editingBOMVariation ? "Mengupdate..." : "Menyimpan...") : (editingBOMVariation ? 'Update' : 'Simpan')}
               </Button>
             </div>
           </div>

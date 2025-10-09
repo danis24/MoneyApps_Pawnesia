@@ -160,9 +160,41 @@ export default function ProductsPage() {
     }
   }, [isSignedIn, user]);
 
+  // Auto-update SKU when materials change and dialog is open for new material
+  useEffect(() => {
+    if (showMaterialDialog && !editingMaterial && materials.length > 0) {
+      const nextSKU = generateNextMaterialSKU();
+      setMaterialForm(prev => ({
+        ...prev,
+        sku: nextSKU
+      }));
+    }
+  }, [materials, showMaterialDialog, editingMaterial]);
+
   const showVariationDetails = (product: Product) => {
     setSelectedProductForDetails(product);
     setShowVariationDetailsDialog(true);
+  };
+
+  const generateNextMaterialSKU = () => {
+    // Filter materials with SKU pattern PRDXXXX
+    const materialsWithPRDSKU = materials.filter(material =>
+      material.sku && material.sku.startsWith('PRD')
+    );
+
+    // Extract numbers from SKUs and find the highest
+    const numbers = materialsWithPRDSKU
+      .map(material => {
+        const match = material.sku.match(/PRD(\d+)/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .filter(num => num > 0);
+
+    const highestNumber = numbers.length > 0 ? Math.max(...numbers) : 0;
+    const nextNumber = highestNumber + 1;
+
+    // Format with leading zeros (4 digits)
+    return `PRD${nextNumber.toString().padStart(4, '0')}`;
   };
 
   const calculateProductKPI = (product: Product): ProductKPI => {
@@ -572,9 +604,10 @@ export default function ProductsPage() {
   };
 
   const resetMaterialForm = () => {
+    const nextSKU = generateNextMaterialSKU();
     setMaterialForm({
       name: "",
-      sku: "",
+      sku: nextSKU,
       unit: "",
       unit_price: "",
       current_stock: "",
@@ -1084,12 +1117,27 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="material_sku">SKU</Label>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="material_sku">SKU</Label>
+                      {!editingMaterial && (
+                        <Badge variant="secondary" className="text-xs">
+                          Otomatis
+                        </Badge>
+                      )}
+                    </div>
                     <Input
                       id="material_sku"
                       value={materialForm.sku}
                       onChange={(e) => setMaterialForm({ ...materialForm, sku: e.target.value })}
+                      readOnly={!editingMaterial}
+                      placeholder="PRD0001"
+                      className={!editingMaterial ? "bg-muted" : ""}
                     />
+                    {!editingMaterial && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        SKU dihasilkan otomatis. Klik edit untuk mengubah SKU.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="unit">Satuan</Label>
