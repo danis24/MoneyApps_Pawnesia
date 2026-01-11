@@ -67,6 +67,14 @@ interface Material {
   created_at: string;
 }
 
+interface ProductVariation {
+  product_name: string;
+  variation: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
 interface SalesOrder {
   id: string;
   order_number: string;
@@ -84,9 +92,10 @@ interface SalesOrder {
   shipping_fee: number;
   shipping_cost: number;
   total_payment: number;
-  net_income: number;
   operational_cost: number;
-  final_income: number;
+  admin_fee?: number;
+  service_fee?: number;
+  processing_fee?: number;
   status: 'pending' | 'processing' | 'shipped' | 'completed' | 'cancelled';
   payment_method: string;
   order_date: string;
@@ -98,6 +107,19 @@ interface SalesOrder {
   user_id: string;
   created_at: string;
   updated_at: string;
+  productVariations?: ProductVariation[];
+  // Generated fields (read-only, calculated by database)
+  net_income?: number; // Still using net_income for database compatibility
+  final_income?: number;
+}
+
+interface OrderItem {
+  sku: string;
+  product_name: string;
+  variation: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
 }
 
 interface ShopeeOrderData {
@@ -140,6 +162,10 @@ interface ShopeeOrderData {
   'Ongkos Kirim Pengembalian Barang': number;
   'Total Pembayaran': number;
   'Perkiraan Ongkos Kirim': number;
+  'Biaya Administrasi': number;
+  'Biaya Layanan': number;
+  'Biaya Proses Pesanan': number;
+  'Estimasi Total Penghasilan': number;
   'Catatan dari Pembeli': string;
   'Catatan': string;
   'Username (Pembeli)': string;
@@ -201,6 +227,7 @@ export default function SalesPage() {
     setShowDetailDialog(true);
   };
 
+  
   // Handle print/export transaction
   const handlePrintTransaction = (transaction: any) => {
     const printWindow = window.open('', '_blank');
@@ -218,6 +245,12 @@ export default function SalesPage() {
             .value { margin-bottom: 10px; }
             .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
             .total { font-size: 18px; font-weight: bold; color: #2563eb; }
+            .product-list { list-style: none; padding: 0; }
+            .product-item { margin-bottom: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+            .fee-breakdown { margin: 10px 0; }
+            .fee-item { display: flex; justify-content: space-between; margin: 5px 0; }
+            .fee-label { color: #666; }
+            .fee-value { text-align: right; }
           </style>
         </head>
         <body>
@@ -259,26 +292,83 @@ export default function SalesPage() {
           ${transaction.type === 'shopee' ? `
           <div class="section">
             <div class="label">Produk</div>
-            <div class="value">${(transaction.originalData as SalesOrder).product_name}</div>
-            <div class="value">SKU: ${(transaction.originalData as SalesOrder).sku}</div>
-            ${(transaction.originalData as SalesOrder).variation ?
-              `<div class="value">Variasi: ${(transaction.originalData as SalesOrder).variation}</div>` : ''}
-            <div class="value">Jumlah: ${(transaction.originalData as SalesOrder).quantity}</div>
+            ${(() => {
+              const orderData = transaction.originalData as SalesOrder;
+
+              // Check if it's a multiple item order
+              if (orderData.productVariations && orderData.productVariations.length > 1) {
+                return orderData.productVariations.map(product => `
+                  <div class="product-item">
+                    <div><strong>${product.product_name}</strong></div>
+                    ${product.variation ? `<div>Variasi: ${product.variation}</div>` : ''}
+                    <div>Jumlah: ${product.quantity} pcs</div>
+                    <div>Harga: Rp ${product.unit_price.toLocaleString('id-ID')}</div>
+                    <div>Total: Rp ${product.total_price.toLocaleString('id-ID')}</div>
+                  </div>
+                `).join('');
+              } else {
+                // Single item
+                return `
+                  <div class="product-item">
+                    <div><strong>${orderData.product_name}</strong></div>
+                    ${orderData.variation && orderData.variation !== 'multiple' ? `<div>Variasi: ${orderData.variation}</div>` : ''}
+                    <div>Jumlah: ${orderData.quantity} pcs</div>
+                    <div>Harga: Rp ${orderData.unit_price.toLocaleString('id-ID')}</div>
+                    <div>Total: Rp ${orderData.total_price.toLocaleString('id-ID')}</div>
+                  </div>
+                `;
+              }
+            })()}
           </div>
-          ` : ''}
 
           <div class="section">
-            <div class="grid">
-              <div>
-                <div class="label">Total</div>
-                <div class="value">Rp ${transaction.total.toLocaleString('id-ID')}</div>
+            <div class="label">Rincian Keuangan</div>
+            <div class="fee-breakdown">
+              <div class="fee-item">
+                <span class="fee-label">Total Pembayaran:</span>
+                <span class="fee-value">Rp ${transaction.type === 'shopee' ?
+                  ((transaction.originalData as SalesOrder).productVariations && (transaction.originalData as SalesOrder).productVariations!.length > 1 ?
+                    (transaction.originalData as SalesOrder).productVariations!.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0) :
+                    (transaction.originalData as SalesOrder).quantity * (transaction.originalData as SalesOrder).unit_price
+                  ).toLocaleString('id-ID') :
+                  transaction.total.toLocaleString('id-ID')
+                }</span>
               </div>
-              <div>
-                <div class="label">Net Revenue</div>
-                <div class="value total">Rp ${transaction.net.toLocaleString('id-ID')}</div>
+              ${transaction.type === 'shopee' ? `
+                <div class="fee-item">
+                  <span class="fee-label">Biaya Pengiriman:</span>
+                  <span class="fee-value">- Rp ${(transaction.originalData as SalesOrder).shipping_cost.toLocaleString('id-ID')}</span>
+                </div>
+                ${(transaction.originalData as SalesOrder).admin_fee !== undefined ? `
+                  <div class="fee-item">
+                    <span class="fee-label">Biaya Administrasi:</span>
+                    <span class="fee-value">- Rp ${(transaction.originalData as SalesOrder).admin_fee?.toLocaleString('id-ID')}</span>
+                  </div>
+                ` : ''}
+                ${(transaction.originalData as SalesOrder).service_fee !== undefined ? `
+                  <div class="fee-item">
+                    <span class="fee-label">Biaya Layanan:</span>
+                    <span class="fee-value">- Rp ${(transaction.originalData as SalesOrder).service_fee?.toLocaleString('id-ID')}</span>
+                  </div>
+                ` : ''}
+                ${(transaction.originalData as SalesOrder).processing_fee !== undefined ? `
+                  <div class="fee-item">
+                    <span class="fee-label">Biaya Proses Pesanan:</span>
+                    <span class="fee-value">- Rp ${(transaction.originalData as SalesOrder).processing_fee?.toLocaleString('id-ID')}</span>
+                  </div>
+                ` : ''}
+                <div class="fee-item">
+                  <span class="fee-label">Biaya Operasional (Material):</span>
+                  <span class="fee-value">- Rp ${(calculateOperationalCost() || 0).toLocaleString('id-ID')}</span>
+                </div>
+              ` : ''}
+              <div class="fee-item">
+                <span class="fee-label"><strong>Net Revenue:</strong></span>
+                <span class="fee-value total"><strong>Rp ${transaction.net.toLocaleString('id-ID')}</strong></span>
               </div>
             </div>
           </div>
+          ` : ''}
 
           ${transaction.status ? `
           <div class="section">
@@ -484,20 +574,66 @@ export default function SalesPage() {
       return matchesSearch && matchesDate();
     });
 
-    filteredShopeeOrders.forEach((order) => {
-      allTransactions.push({
-        type: 'shopee',
-        id: order.id,
-        reference: order.order_number,
-        shop: 'Shopee',
-        channel: 'shopee',
-        customer: order.customer_name,
-        date: order.order_date,
-        total: order.total_payment,
-        net: order.final_income,
-        status: order.status,
-        originalData: order
-      });
+    // Group Shopee orders by order_number
+    const shopeeOrdersByOrderNumber = filteredShopeeOrders.reduce((acc, order) => {
+      if (!acc[order.order_number]) {
+        acc[order.order_number] = [];
+      }
+      acc[order.order_number].push(order);
+      return acc;
+    }, {} as Record<string, typeof salesOrders>);
+
+    // Process each order group
+    Object.entries(shopeeOrdersByOrderNumber).forEach(([orderNumber, orders]) => {
+      if (orders.length === 1) {
+        // Single item order
+        const order = orders[0];
+        allTransactions.push({
+          type: 'shopee',
+          id: order.id,
+          reference: order.order_number,
+          shop: 'Shopee',
+          channel: 'shopee',
+          customer: order.customer_name,
+          date: order.order_date,
+          total: order.total_payment,
+          net: order.net_income || (order.total_payment - order.operational_cost),
+          status: order.status,
+          originalData: order
+        });
+      } else {
+        // Multiple items order - merge them
+        const firstOrder = orders[0];
+        const totalPayment = orders.reduce((sum, order) => sum + order.total_payment, 0);
+        const totalOperationalCost = orders.reduce((sum, order) => sum + order.operational_cost, 0);
+        const totalNetIncome = orders.reduce((sum, order) => sum + (order.net_income || (order.total_payment - order.operational_cost)), 0);
+
+        allTransactions.push({
+          type: 'shopee',
+          id: firstOrder.id,
+          reference: orderNumber,
+          shop: 'Shopee',
+          channel: 'shopee',
+          customer: firstOrder.customer_name,
+          date: firstOrder.order_date,
+          total: totalPayment,
+          net: totalNetIncome,
+          status: firstOrder.status,
+          originalData: {
+            ...firstOrder,
+            quantity: orders.reduce((sum, order) => sum + order.quantity, 0),
+            variation: 'multiple',
+            net_income: totalNetIncome,
+            productVariations: orders.map(order => ({
+              product_name: order.product_name,
+              variation: order.variation,
+              quantity: order.quantity,
+              unit_price: order.unit_price,
+              total_price: order.total_price
+            }))
+          }
+        });
+      }
     });
 
     // Apply type filter
@@ -598,7 +734,7 @@ export default function SalesPage() {
     return isNaN(parsedPrice) ? 0 : parsedPrice;
   };
 
-  // Extract variation from product name
+  // Extract variation from product name (fallback only)
   const extractVariation = (productName: string): string => {
     if (!productName) return '';
 
@@ -626,23 +762,51 @@ export default function SalesPage() {
   };
 
   const processShopeeOrder = async (orderData: ShopeeOrderData) => {
+    return await processShopeeOrderRow(orderData);
+  };
+
+  const processShopeeOrderRow = async (orderData: ShopeeOrderData) => {
     try {
       const token = await getToken();
       const authSupabase = createSupabaseClientWithAuth(token);
 
-      // Calculate values with proper price formatting
+      const orderNumber = orderData['No. Pesanan'];
+
+      // Calculate values for this row
+      const unitPrice = cleanPriceFormat(orderData['Harga Setelah Diskon'] || orderData['Harga Awal']);
+      const quantity = parseInt(orderData['Jumlah']) || 1;
+      const totalProductPrice = cleanPriceFormat(orderData['Total Harga Produk']);
       const shippingFee = cleanPriceFormat(orderData['Ongkos Kirim Dibayar oleh Pembeli']);
       const shippingCost = cleanPriceFormat(orderData['Estimasi Potongan Biaya Pengiriman']);
-      const totalPayment = cleanPriceFormat(orderData['Total Pembayaran']);
-      const unitPrice = cleanPriceFormat(orderData['Harga Per Satuan (Setelah Diskon)'] || orderData['Harga Per Satuan']);
+
+      // Calculate Total Pembayaran as (quantity * unit_price) for this variation
+      const calculatedTotalPayment = quantity * unitPrice;
+
+      // Use calculated Total Pembayaran for fee calculations
+      const totalPayment = calculatedTotalPayment;
+
+      // Calculate transaction fees based on new rules:
+      // Biaya Administrasi: 7.47% dari Total Pembayaran
+      // Biaya Layanan: 7.97% dari Total Pembayaran
+      // Biaya Proses Pesanan: Rp 1.250 per pesanan
+      const adminFee = Math.round(totalPayment * 0.0747); // 7.47%
+      const serviceFee = Math.round(totalPayment * 0.0797); // 7.97%
+      const processingFee = 1250; // Fixed per order
+      const transactionFees = adminFee + serviceFee + processingFee;
+
+      // Calculate operational cost (material costs per order)
       const operationalCostPerOrder = calculateOperationalCost();
 
-      // Note: net_income and final_income are calculated automatically by database as generated columns
+      // Calculate Net Revenue based on the new rules:
+      // Net Revenue = Total Pembayaran - Biaya Administrasi - Biaya Layanan - Biaya Proses Pesanan - Biaya Operasional (Material)
+      const netRevenue = totalPayment - adminFee - serviceFee - processingFee - operationalCostPerOrder;
 
-      // Extract variation from product name
-      const variation = extractVariation(orderData['Nama Produk']);
+      // For storage in database, we combine transaction fees and operational costs
+      const totalOperationalCost = transactionFees + operationalCostPerOrder;
 
-      
+      // For display purposes, store net revenue
+      const finalNetRevenue = netRevenue;
+
       // Determine status
       let status: 'pending' | 'processing' | 'shipped' | 'completed' | 'cancelled';
       switch (orderData['Status Pesanan']) {
@@ -662,102 +826,56 @@ export default function SalesPage() {
           status = 'pending';
       }
 
-      // Check if order already exists
-      console.log("Checking for existing order:", orderData['No. Pesanan']);
-      let existingOrder = null;
-      let checkError = null;
+      // Always insert new order to allow duplicate uploads from different times
+      console.log("Inserting new order row:", orderNumber);
+      const { error } = await authSupabase
+        .from("sales_orders")
+        .insert({
+          order_number: orderNumber,
+          customer_name: orderData['Nama Penerima'],
+          customer_phone: orderData['No. Telepon'],
+          address: orderData['Alamat Pengiriman'],
+          city: orderData['Kota/Kabupaten'],
+          province: orderData['Provinsi'],
+          product_name: orderData['Nama Produk'],
+          sku: orderData['SKU Induk'],
+          variation: orderData['Nama Variasi'] || extractVariation(orderData['Nama Produk']),
+          quantity: quantity,
+          unit_price: unitPrice,
+          total_price: totalProductPrice,
+          shipping_fee: shippingFee,
+          shipping_cost: shippingCost,
+          total_payment: totalPayment,
+          operational_cost: totalOperationalCost,
+          admin_fee: adminFee,
+          service_fee: serviceFee,
+          processing_fee: processingFee,
+          status,
+          payment_method: orderData['Metode Pembayaran'],
+          order_date: new Date(orderData['Waktu Pesanan Dibuat']).toISOString(),
+          payment_date: orderData['Waktu Pembayaran Dilakukan'] ? new Date(orderData['Waktu Pembayaran Dilakukan']).toISOString() : null,
+          shipping_deadline: orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)'] ? new Date(orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)']).toISOString() : null,
+          resi_number: orderData['No. Resi'],
+          notes: orderData['Catatan dari Pembeli'],
+          user_id: user?.id,
+          shop_id: null,
+        });
 
-      try {
-        const result = await authSupabase
-          .from("sales_orders")
-          .select("id")
-          .eq("order_number", orderData['No. Pesanan'])
-          .eq("user_id", user?.id)
-          .maybeSingle(); // Use maybeSingle instead of single to avoid PGRST116
-
-        existingOrder = result.data;
-        checkError = result.error;
-      } catch (err) {
-        console.error("Exception when checking existing order:", err);
-        throw new Error("Database connection error when checking existing order");
+      if (error) {
+        console.error("Insert error:", error);
+        throw error;
       }
 
-      if (checkError) {
-        console.error("Error checking existing order:", checkError);
+      console.log("Order row inserted successfully:", orderNumber);
 
-        // If table doesn't exist, show a helpful error
-        if (checkError.code === '42P01') { // undefined_table
-          throw new Error("The sales_orders table doesn't exist. Please run the database migration first.");
-        }
+      // Reduce stock if order is not cancelled
+      if (status !== 'cancelled') {
+        await reduceProductStock(orderData['SKU Induk'], orderData['Jumlah']);
       }
 
-      if (existingOrder) {
-        // Update existing order
-        const { error } = await authSupabase
-          .from("sales_orders")
-          .update({
-            status,
-            resi_number: orderData['No. Resi'],
-            shipping_deadline: orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)'] ? new Date(orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)']).toISOString() : null,
-            total_payment: totalPayment,
-            shipping_fee: shippingFee,
-            shipping_cost: shippingCost,
-            operational_cost: operationalCostPerOrder,
-            variation: variation,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingOrder.id);
-
-        if (error) throw error;
-      } else {
-        // Insert new order
-        console.log("Inserting new order:", orderData['No. Pesanan']);
-        const { error } = await authSupabase
-          .from("sales_orders")
-          .insert({
-            order_number: orderData['No. Pesanan'],
-            customer_name: orderData['Nama Penerima'],
-            customer_phone: orderData['No. Telepon'],
-            address: orderData['Alamat Pengiriman'],
-            city: orderData['Kota/Kabupaten'],
-            province: orderData['Provinsi'],
-            product_name: orderData['Nama Produk'],
-            sku: orderData['SKU Induk'],
-            variation: variation, // Use extracted variation
-            quantity: parseInt(orderData['Jumlah']) || 1,
-            unit_price: unitPrice, // Use cleaned price
-            total_price: cleanPriceFormat(orderData['Total Harga Produk']), // Use cleaned price
-            shipping_fee: shippingFee,
-            shipping_cost: shippingCost,
-            total_payment: totalPayment, // Use cleaned price
-            operational_cost: operationalCostPerOrder,
-            status,
-            payment_method: orderData['Metode Pembayaran'],
-            order_date: new Date(orderData['Waktu Pesanan Dibuat']).toISOString(),
-            payment_date: orderData['Waktu Pembayaran Dilakukan'] ? new Date(orderData['Waktu Pembayaran Dilakukan']).toISOString() : null,
-            shipping_deadline: orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)'] ? new Date(orderData['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)']).toISOString() : null,
-            resi_number: orderData['No. Resi'],
-            notes: orderData['Catatan dari Pembeli'],
-            user_id: user?.id,
-            shop_id: null, // Remove shop_id reference since it expects UUID
-          });
-
-        if (error) {
-          console.error("Insert error:", error);
-          throw error;
-        }
-
-        console.log("Order inserted successfully:", orderData['No. Pesanan']);
-
-        // Reduce stock if order is not cancelled
-        if (status !== 'cancelled') {
-          await reduceProductStock(orderData['SKU Induk'], orderData['Jumlah']);
-        }
-      }
-
-      return { success: true, orderNumber: orderData['No. Pesanan'] };
+      return { success: true, orderNumber, rawData: orderData };
     } catch (error) {
-      console.error("Error processing order:", error);
+      console.error("Error processing order row:", error);
       console.error("Error details:", {
         message: error.message,
         code: error.code,
@@ -765,7 +883,7 @@ export default function SalesPage() {
         hint: error.hint,
         stack: error.stack
       });
-      return { success: false, orderNumber: orderData['No. Pesanan'], error: error.message || 'Unknown error' };
+      return { success: false, orderNumber: orderData['No. Pesanan'], error: error.message || 'Unknown error', rawData: orderData };
     }
   };
 
@@ -838,6 +956,7 @@ export default function SalesPage() {
     if (!previewData.length) return;
 
     setImporting(true);
+
     setImportProgress({
       current: 0,
       total: previewData.length,
@@ -863,10 +982,10 @@ export default function SalesPage() {
           ...prev,
           current: currentProgress,
           percentage: percentage,
-          status: `Memproses pesanan ${orderNumber}...`
+          status: `Memproses baris ${i + 1}/${previewData.length}: ${orderNumber}...`
         }));
 
-        const result = await processShopeeOrder(orderData);
+        const result = await processShopeeOrderRow(orderData);
         results.push(result);
 
         if (result.success) {
@@ -876,7 +995,7 @@ export default function SalesPage() {
         }
 
         // Small delay to show progress
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       // Final progress update
@@ -886,19 +1005,22 @@ export default function SalesPage() {
         status: 'Import selesai!'
       }));
 
-      // Show results
+      // Show results - calculate total revenue
       const totalRevenue = results
         .filter(result => result.success)
         .reduce((sum, result) => {
-          const orderData = previewData.find(o => o['No. Pesanan'] === result.orderNumber);
-          return sum + cleanPriceFormat(orderData?.['Total Pembayaran'] || 0);
+          const orderData = previewData.find(o => o === result.rawData);
+          const unitPrice = cleanPriceFormat(orderData?.['Harga Setelah Diskon'] || orderData?.['Harga Awal'] || 0);
+          const quantity = parseInt(orderData?.['Jumlah'] || 1);
+          return sum + (unitPrice * quantity);
         }, 0);
 
       alert(
         `Import selesai!\n\n` +
-        `Berhasil: ${successfulCount} pesanan\n` +
-        `Gagal: ${failedCount} pesanan\n\n` +
-        `Total pendapatan bersih: Rp ${totalRevenue.toLocaleString('id-ID')}`
+        `Berhasil: ${successfulCount} baris\n` +
+        `Gagal: ${failedCount} baris\n` +
+        `Total data: ${previewData.length} baris\n\n` +
+        `Total pendapatan: Rp ${totalRevenue.toLocaleString('id-ID')}`
       );
 
       // Refresh data
@@ -1109,7 +1231,18 @@ export default function SalesPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Preview Data</h3>
-                      <Badge variant="secondary">{previewData.length} pesanan</Badge>
+                      <Badge variant="secondary">{previewData.length} baris</Badge>
+                    </div>
+
+                    {/* Import info */}
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h4 className="font-medium text-blue-900 mb-2">Cara Kerja Import</h4>
+                      <div className="text-sm text-blue-800 space-y-1">
+                        <p>• Setiap baris dari Excel akan diimport sebagai record terpisah</p>
+                        <p>• Data variasi produk diambil dari kolom "Nama Variasi"</p>
+                        <p>• Total Pembayaran per baris = Harga Setelah Diskon × Jumlah</p>
+                        <p>• Biaya transaksi dihitung per item (Administrasi + Layanan + Proses)</p>
+                      </div>
                     </div>
 
                     <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
@@ -1118,8 +1251,9 @@ export default function SalesPage() {
                           <TableRow>
                             <TableHead>No. Pesanan</TableHead>
                             <TableHead>Produk</TableHead>
+                            <TableHead>Variasi</TableHead>
                             <TableHead>Jumlah</TableHead>
-                            <TableHead>Total</TableHead>
+                            <TableHead>Harga/Item</TableHead>
                             <TableHead>Status</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1127,9 +1261,25 @@ export default function SalesPage() {
                           {previewData.slice(0, 10).map((order, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium">{order['No. Pesanan']}</TableCell>
-                              <TableCell>{order['Nama Produk']}</TableCell>
+                              <TableCell>
+                                <div className="max-w-xs truncate" title={order['Nama Produk']}>
+                                  {order['Nama Produk']}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="max-w-xs truncate" title={order['Nama Variasi']}>
+                                  {order['Nama Variasi'] || extractVariation(order['Nama Produk']) || '-'}
+                                </div>
+                              </TableCell>
                               <TableCell>{order['Jumlah']}</TableCell>
-                              <TableCell>Rp {cleanPriceFormat(order['Total Pembayaran']).toLocaleString('id-ID')}</TableCell>
+                              <TableCell>
+                        <div className="text-right">
+                          Rp {cleanPriceFormat(order['Harga Setelah Diskon'] || order['Harga Awal']).toLocaleString('id-ID')}
+                          <div className="text-xs text-muted-foreground">
+                            Total: Rp {(cleanPriceFormat(order['Harga Setelah Diskon'] || order['Harga Awal']) * (parseInt(order['Jumlah']) || 1)).toLocaleString('id-ID')}
+                          </div>
+                        </div>
+                      </TableCell>
                               <TableCell>
                                 <Badge variant="outline">{order['Status Pesanan']}</Badge>
                               </TableCell>
@@ -1139,7 +1289,7 @@ export default function SalesPage() {
                       </Table>
                       {previewData.length > 10 && (
                         <p className="text-sm text-muted-foreground mt-2">
-                          ... dan {previewData.length - 10} pesanan lainnya
+                          ... dan {previewData.length - 10} baris lainnya
                         </p>
                       )}
                     </div>
@@ -1335,10 +1485,13 @@ export default function SalesPage() {
                   <TableHead>Referensi</TableHead>
                   <TableHead>Tipe</TableHead>
                   <TableHead>Toko & Channel</TableHead>
+                  <TableHead>Produk</TableHead>
+                  <TableHead>Variasi</TableHead>
+                  <TableHead>Qty</TableHead>
                   <TableHead>Pelanggan</TableHead>
                   <TableHead>Tanggal</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Net</TableHead>
+                  <TableHead className="text-right">Net Revenue</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Aksi</TableHead>
                 </TableRow>
@@ -1366,17 +1519,67 @@ export default function SalesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {transaction.customer || "-"}
-                      {transaction.type === 'manual' && (transaction.originalData as Sale).customer_phone && (
-                        <div className="text-sm text-muted-foreground">
-                          {(transaction.originalData as Sale).customer_phone}
-                        </div>
-                      )}
-                      {transaction.type === 'shopee' && (transaction.originalData as SalesOrder).customer_phone && (
-                        <div className="text-sm text-muted-foreground">
-                          {(transaction.originalData as SalesOrder).customer_phone}
-                        </div>
-                      )}
+                      <div>
+                        {transaction.type === 'shopee' && (
+                          <div className="font-medium text-sm truncate max-w-xs" title={(transaction.originalData as SalesOrder).product_name}>
+                            {(transaction.originalData as SalesOrder).product_name}
+                          </div>
+                        )}
+                        {transaction.type === 'manual' && (
+                          <div className="text-sm">
+                            {transaction.reference}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        {transaction.type === 'shopee' && (
+                          <>
+                            {(transaction.originalData as SalesOrder).variation && (transaction.originalData as SalesOrder).variation !== 'multiple' && (
+                              <div className="text-xs text-muted-foreground truncate max-w-xs" title={(transaction.originalData as SalesOrder).variation}>
+                                {(transaction.originalData as SalesOrder).variation}
+                              </div>
+                            )}
+                            {(transaction.originalData as SalesOrder).variation === 'multiple' && (
+                              <div className="text-xs text-muted-foreground">Multiple items</div>
+                            )}
+                            {!((transaction.originalData as SalesOrder).variation) && (
+                              <div className="text-xs text-muted-foreground">-</div>
+                            )}
+                          </>
+                        )}
+                        {transaction.type === 'manual' && (
+                          <div className="text-sm text-muted-foreground">-</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        {transaction.type === 'shopee' && (
+                          <span className="font-medium">
+                            {(transaction.originalData as SalesOrder).quantity || 1}
+                          </span>
+                        )}
+                        {transaction.type === 'manual' && (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        {transaction.customer || "-"}
+                        {transaction.type === 'manual' && (transaction.originalData as Sale).customer_phone && (
+                          <div className="text-sm text-muted-foreground">
+                            {(transaction.originalData as Sale).customer_phone}
+                          </div>
+                        )}
+                        {transaction.type === 'shopee' && (transaction.originalData as SalesOrder).customer_phone && (
+                          <div className="text-sm text-muted-foreground">
+                            {(transaction.originalData as SalesOrder).customer_phone}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {new Date(transaction.date).toLocaleDateString("id-ID")}
@@ -1516,6 +1719,11 @@ export default function SalesPage() {
                 <div>
                   <div className="text-sm text-muted-foreground">Referensi</div>
                   <div className="font-semibold text-lg">{selectedTransaction.reference}</div>
+                  {selectedTransaction.type === 'shopee' && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Import ke {new Date(selectedTransaction.originalData.created_at).toLocaleDateString('id-ID')}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Tipe Transaksi</div>
@@ -1589,48 +1797,145 @@ export default function SalesPage() {
               {selectedTransaction.type === 'shopee' && (
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold">Informasi Produk</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Nama Produk</div>
-                      <div className="font-medium">{(selectedTransaction.originalData as SalesOrder).product_name}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">SKU</div>
-                      <div>{(selectedTransaction.originalData as SalesOrder).sku}</div>
-                    </div>
-                    {(selectedTransaction.originalData as SalesOrder).variation && (
-                      <div>
-                        <div className="text-sm text-muted-foreground">Variasi</div>
-                        <div>{(selectedTransaction.originalData as SalesOrder).variation}</div>
+
+                  {/* Check if it's a multiple item order */}
+                  {(selectedTransaction.originalData as SalesOrder).productVariations && (selectedTransaction.originalData as SalesOrder).productVariations!.length > 1 ? (
+                    // Multiple products
+                    <div className="border rounded-lg p-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Produk</TableHead>
+                            <TableHead>Variasi</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Harga/Item</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(selectedTransaction.originalData as SalesOrder).productVariations!.map((product, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <div className="font-medium text-sm">{product.product_name}</div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm text-muted-foreground">{product.variation || '-'}</div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className="font-medium">{product.quantity}</span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                Rp {product.unit_price.toLocaleString('id-ID')}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                Rp {product.total_price.toLocaleString('id-ID')}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <div className="text-muted-foreground">Total Jumlah</div>
+                            <div className="font-medium">
+                              {(selectedTransaction.originalData as SalesOrder).productVariations!.reduce((sum, p) => sum + p.quantity, 0)} pcs
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">Total Produk</div>
+                            <div className="font-medium">
+                              {(selectedTransaction.originalData as SalesOrder).productVariations!.length} item
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">Total Pembayaran</div>
+                            <div className="font-medium text-lg text-blue-600">
+                              Rp {(selectedTransaction.originalData as SalesOrder).productVariations!.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0).toLocaleString('id-ID')}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              (Jumlah × Harga per item untuk semua variasi)
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <div className="text-sm text-muted-foreground">Jumlah</div>
-                      <div>{(selectedTransaction.originalData as SalesOrder).quantity} pcs</div>
                     </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Harga Satuan</div>
-                      <div>Rp {(selectedTransaction.originalData as SalesOrder).unit_price.toLocaleString('id-ID')}</div>
+                  ) : (
+                    // Single product
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg">
+                      <div className="md:col-span-2">
+                        <div className="text-sm text-muted-foreground">Nama Produk</div>
+                        <div className="font-medium">{(selectedTransaction.originalData as SalesOrder).product_name}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">SKU</div>
+                        <div>{(selectedTransaction.originalData as SalesOrder).sku}</div>
+                      </div>
+                      {(selectedTransaction.originalData as SalesOrder).variation && (selectedTransaction.originalData as SalesOrder).variation !== 'multiple' && (
+                        <div>
+                          <div className="text-sm text-muted-foreground">Variasi</div>
+                          <div>{(selectedTransaction.originalData as SalesOrder).variation}</div>
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-sm text-muted-foreground">Jumlah</div>
+                        <div>{(selectedTransaction.originalData as SalesOrder).quantity} pcs</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Harga Satuan</div>
+                        <div>Rp {(selectedTransaction.originalData as SalesOrder).unit_price.toLocaleString('id-ID')}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Total Harga</div>
+                        <div>Rp {(selectedTransaction.originalData as SalesOrder).total_price.toLocaleString('id-ID')}</div>
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="text-sm text-muted-foreground">Total Pembayaran</div>
+                        <div className="font-medium text-lg text-blue-600">
+                          Rp {((selectedTransaction.originalData as SalesOrder).quantity * (selectedTransaction.originalData as SalesOrder).unit_price).toLocaleString('id-ID')}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          ({(selectedTransaction.originalData as SalesOrder).quantity} × Rp {(selectedTransaction.originalData as SalesOrder).unit_price.toLocaleString('id-ID')})
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
               {/* Financial Information */}
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold">Informasi Keuangan</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Total Pembayaran</div>
-                    <div className="font-semibold">Rp {selectedTransaction.total.toLocaleString('id-ID')}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Net Revenue</div>
-                    <div className="font-semibold text-green-600">Rp {selectedTransaction.net.toLocaleString('id-ID')}</div>
+                <div className="border rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Total Pembayaran</div>
+                      <div className="font-semibold text-lg">
+                        Rp {selectedTransaction.type === 'shopee' ?
+                          ((selectedTransaction.originalData as SalesOrder).productVariations && (selectedTransaction.originalData as SalesOrder).productVariations!.length > 1 ?
+                            (selectedTransaction.originalData as SalesOrder).productVariations!.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0) :
+                            (selectedTransaction.originalData as SalesOrder).quantity * (selectedTransaction.originalData as SalesOrder).unit_price
+                          ).toLocaleString('id-ID') :
+                          selectedTransaction.total.toLocaleString('id-ID')
+                        }
+                      </div>
+                      {selectedTransaction.type === 'shopee' && (
+                        <div className="text-xs text-muted-foreground">
+                          {(selectedTransaction.originalData as SalesOrder).productVariations && (selectedTransaction.originalData as SalesOrder).productVariations!.length > 1 ?
+                            'Jumlah × Harga per item untuk semua variasi' :
+                            `${(selectedTransaction.originalData as SalesOrder).quantity} × Rp ${(selectedTransaction.originalData as SalesOrder).unit_price.toLocaleString('id-ID')}`
+                          }
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Net Revenue</div>
+                      <div className="font-semibold text-green-600 text-lg">Rp {selectedTransaction.net.toLocaleString('id-ID')}</div>
+                    </div>
                   </div>
 
                   {selectedTransaction.type === 'manual' && (
-                    <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
                       <div>
                         <div className="text-sm text-muted-foreground">Platform Fee</div>
                         <div className="text-red-600">- Rp {(selectedTransaction.originalData as Sale).platform_fee.toLocaleString('id-ID')}</div>
@@ -1639,28 +1944,63 @@ export default function SalesPage() {
                         <div className="text-sm text-muted-foreground">Shipping Fee</div>
                         <div className="text-green-600">+ Rp {(selectedTransaction.originalData as Sale).shipping_fee.toLocaleString('id-ID')}</div>
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {selectedTransaction.type === 'shopee' && (
-                    <>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Shipping Fee</div>
-                        <div className="text-green-600">+ Rp {(selectedTransaction.originalData as SalesOrder).shipping_fee.toLocaleString('id-ID')}</div>
+                    <div className="space-y-3 pt-4 border-t">
+                      <h4 className="font-medium text-sm text-muted-foreground">Rincian Biaya & Penghasilan</h4>
+                      <div className="space-y-2">
+                        {(() => {
+                          // Calculate Total Pembayaran
+                          const totalPembayaran = (selectedTransaction.originalData as SalesOrder).productVariations && (selectedTransaction.originalData as SalesOrder).productVariations!.length > 1 ?
+                            (selectedTransaction.originalData as SalesOrder).productVariations!.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0) :
+                            (selectedTransaction.originalData as SalesOrder).quantity * (selectedTransaction.originalData as SalesOrder).unit_price;
+
+                          // Calculate transaction fees directly from Total Pembayaran
+                          const adminFee = Math.round(totalPembayaran * 0.0747); // 7.47%
+                          const serviceFee = Math.round(totalPembayaran * 0.0797); // 7.97%
+                          const processingFee = 1250; // Fixed per order
+                          const totalTransactionFees = adminFee + serviceFee + processingFee;
+                          const operationalCost = calculateOperationalCost();
+                          const totalBiaya = totalTransactionFees + operationalCost;
+                          const netRevenue = totalPembayaran - totalBiaya;
+
+                          return (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-sm">Biaya Administrasi (7.47%)</span>
+                                <span className="text-red-600">- Rp {adminFee.toLocaleString('id-ID')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm">Biaya Layanan (7.97%)</span>
+                                <span className="text-red-600">- Rp {serviceFee.toLocaleString('id-ID')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm">Biaya Proses Pesanan</span>
+                                <span className="text-red-600">- Rp {processingFee.toLocaleString('id-ID')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm">Biaya Operasional (Material)</span>
+                                <span className="text-red-600">- Rp {operationalCost.toLocaleString('id-ID')}</span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-medium">Total Biaya</span>
+                                <span className="font-medium text-red-600">
+                                  - Rp {totalBiaya.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-medium">Net Revenue</span>
+                                <span className="font-medium text-green-600">
+                                  Rp {netRevenue.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Shipping Cost</div>
-                        <div className="text-red-600">- Rp {(selectedTransaction.originalData as SalesOrder).shipping_cost.toLocaleString('id-ID')}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Operational Cost</div>
-                        <div className="text-red-600">- Rp {(selectedTransaction.originalData as SalesOrder).operational_cost.toLocaleString('id-ID')}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Net Income</div>
-                        <div className="font-medium">Rp {(selectedTransaction.originalData as SalesOrder).net_income.toLocaleString('id-ID')}</div>
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
